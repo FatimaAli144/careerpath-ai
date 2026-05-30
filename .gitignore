@@ -1,0 +1,8 @@
+# Environment — never commit your API keys
+.env
+
+# Dependencies — Vercel installs these automatically
+node_modules/
+
+# macOS
+.DS_Store

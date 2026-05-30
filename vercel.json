@@ -1,0 +1,9 @@
+{
+  "name": "careerpath-ai",
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/chat",    "destination": "/api/chat.js"    },
+    { "source": "/api/improve", "destination": "/api/improve.js" },
+    { "source": "/api/dataset", "destination": "/api/dataset.js" }
+  ]
+}
