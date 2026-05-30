@@ -30,31 +30,21 @@ function getLiveSkillCloud() {
 }
 
 function getLiveTopRoles() {
-  // First: use real application data
   const students = (window.LocalAuth.getUsers() || []).filter(u => u.role === "student");
-  const appCounts = {};
+  const counts = {};
   students.forEach(s => (s.appliedJobs || []).forEach(j => {
-    if (j.title) appCounts[j.title] = (appCounts[j.title] || 0) + 1;
+    if (j.title) counts[j.title] = (counts[j.title] || 0) + 1;
   }));
-  const fromApps = Object.entries(appCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  if (fromApps.length) {
-    const max = fromApps[0][1];
-    return fromApps.map(([label, value]) => ({ label, value, pct: Math.round((value / max) * 100) }));
-  }
-  // Fallback: show job title distribution from dataset (not hardcoded)
-  const allJobs = window.ALL_JOBS || window.MOCK.jobs || [];
-  const jobCounts = {};
-  allJobs.forEach(j => { if (j.title) jobCounts[j.title] = (jobCounts[j.title] || 0) + 1; });
-  const fromDataset = Object.entries(jobCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  if (!fromDataset.length) return [];
-  const max = fromDataset[0][1];
-  return fromDataset.map(([label, value]) => ({ label, value, pct: Math.round((value / max) * 100) }));
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (!sorted.length) return null; // null = no data yet
+  const max = sorted[0][1];
+  return sorted.map(([label, value]) => ({ label, value, pct: Math.round((value / max) * 100) }));
 }
 
 function getLiveFunnel() {
   const students = (window.LocalAuth.getUsers() || []).filter(u => u.role === "student");
   const total = students.reduce((n, s) => n + (s.appliedJobs || []).length, 0);
-  // Always dynamic — shows zeros when no applications yet
+  if (!total) return null; // null = no data yet
   return [
     { label: "Applied",     value: total,                      pct: 100  },
     { label: "Reviewed",    value: Math.floor(total * 0.50),   pct: 50   },
@@ -119,12 +109,20 @@ const AdminSidebar = ({ current, onSelect }) => {
   );
 };
 
+// ── Empty state helper ────────────────────────────────────────────────────
+const ChartEmptyState = ({ message }) => (
+  <div style={{ textAlign: "center", padding: "28px 16px", color: "var(--text-3)" }}>
+    <div style={{ fontSize: 28, marginBottom: 8 }}>📊</div>
+    <p style={{ margin: 0, fontSize: 13 }}>{message}</p>
+  </div>
+);
+
 // ── Overview ──────────────────────────────────────────────────────────────
 const AdminOverview = () => {
-  const M       = window.MOCK;
-  const stats   = getAdminStats();
-  const cloud   = getLiveSkillCloud();
-  const funnel  = getLiveFunnel();
+  const stats  = getAdminStats();
+  const cloud  = getLiveSkillCloud();
+  const topRoles = getLiveTopRoles();
+  const funnel   = getLiveFunnel();
 
   return (
     <div>
@@ -137,30 +135,38 @@ const AdminOverview = () => {
 
       <div className="grid-2" style={{ alignItems: "start" }}>
         <Card title="Top job roles applied" sub="From student applications">
-          <BarChart data={getLiveTopRoles()} />
+          {topRoles
+            ? <BarChart data={topRoles} />
+            : <ChartEmptyState message="No applications yet. Data will appear once students start applying to jobs." />}
         </Card>
 
         <div className="stack-md">
           <Card title="Top skills in pool" sub="Across all student profiles">
-            <div className="skills-cloud">
-              {cloud.map((s, i) => {
-                const big = s.count > 2;
-                return (
-                  <span key={i} className="tag" style={{
-                    fontSize: big ? 13 : 11,
-                    background: big ? "var(--primary-50)" : "#F1F5F9",
-                    color: big ? "var(--primary-600)" : "var(--text-2)",
-                    padding: big ? "5px 12px" : "4px 10px",
-                  }}>
-                    {s.name}
-                    {s.count > 0 && <span style={{ opacity: 0.55, marginLeft: 4 }}>{s.count}</span>}
-                  </span>
-                );
-              })}
-            </div>
+            {cloud.length > 0 ? (
+              <div className="skills-cloud">
+                {cloud.map((s, i) => {
+                  const big = s.count > 2;
+                  return (
+                    <span key={i} className="tag" style={{
+                      fontSize: big ? 13 : 11,
+                      background: big ? "var(--primary-50)" : "#F1F5F9",
+                      color: big ? "var(--primary-600)" : "var(--text-2)",
+                      padding: big ? "5px 12px" : "4px 10px",
+                    }}>
+                      {s.name}
+                      {s.count > 0 && <span style={{ opacity: 0.55, marginLeft: 4 }}>{s.count}</span>}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : (
+              <ChartEmptyState message="No student profiles yet. Skills will appear once students complete onboarding." />
+            )}
           </Card>
           <Card title="Application funnel" sub="All applications">
-            <BarChart data={funnel} tone="green" />
+            {funnel
+              ? <BarChart data={funnel} tone="green" />
+              : <ChartEmptyState message="No applications yet. Funnel data will appear once students start applying." />}
           </Card>
         </div>
       </div>
@@ -311,20 +317,28 @@ const AdminEmployers = () => {
 };
 
 // ── Analytics ─────────────────────────────────────────────────────────────
-const AdminAnalytics = () => (
-  <div>
-    <h1 className="page-title">Analytics</h1>
-    <p className="page-sub">Trends across the talent pool.</p>
-    <div className="grid-2-eq" style={{ alignItems: "start" }}>
-      <Card title="Applications per role" sub="From student applications">
-        <BarChart data={getLiveTopRoles()} tone="primary" />
-      </Card>
-      <Card title="Top contributing universities" sub="By student registration">
-        <BarChart data={getLiveUniversityCounts()} tone="green" />
-      </Card>
+const AdminAnalytics = () => {
+  const topRoles = getLiveTopRoles();
+  const uniCounts = getLiveUniversityCounts();
+  return (
+    <div>
+      <h1 className="page-title">Analytics</h1>
+      <p className="page-sub">Trends across the talent pool.</p>
+      <div className="grid-2-eq" style={{ alignItems: "start" }}>
+        <Card title="Applications per role" sub="From student applications">
+          {topRoles
+            ? <BarChart data={topRoles} tone="primary" />
+            : <ChartEmptyState message="No applications yet. Data will appear once students start applying." />}
+        </Card>
+        <Card title="Top contributing universities" sub="By student registration">
+          {uniCounts.length > 0
+            ? <BarChart data={uniCounts} tone="green" />
+            : <ChartEmptyState message="No students registered yet. Data will appear once students sign up." />}
+        </Card>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ── Dashboard shell ───────────────────────────────────────────────────────
 const AdminDashboard = ({ allJobs }) => {
