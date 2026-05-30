@@ -1,6 +1,22 @@
 {
   "name": "careerpath-ai",
   "version": 2,
+  "buildCommand": "",
+  "outputDirectory": ".",
+  "headers": [
+    {
+      "source": "/(.*)\\.jsx",
+      "headers": [
+        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" }
+      ]
+    },
+    {
+      "source": "/(.*)\\.js",
+      "headers": [
+        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" }
+      ]
+    }
+  ],
   "rewrites": [
     { "source": "/api/chat",    "destination": "/api/chat.js"    },
     { "source": "/api/improve", "destination": "/api/improve.js" },
