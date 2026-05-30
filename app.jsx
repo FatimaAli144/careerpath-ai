@@ -340,8 +340,9 @@ const App = () => {
           description: r.description || "",
         }));
         setAllJobs(transformed);
+        window.ALL_JOBS = transformed; // shared with admin/employer helpers
       })
-      .catch(() => {}); // silently fall back to MOCK.jobs
+      .catch(() => { window.ALL_JOBS = window.MOCK.jobs; });
   }, []);
 
   // ── Recompute profileStrength when resume changes ──
@@ -432,7 +433,26 @@ const App = () => {
   };
 
   const handlePostedJob = (form) => {
-    pushSnack({ tone: "success", title: "Job posted", sub: `"${form.title}" is now live.` });
+    const company = currentUser?.profile?.company || currentUser?.name || "";
+    const newJob = {
+      id:          `posted_${Date.now()}`,
+      title:       form.title,
+      company,
+      location:    form.location || `${company} · On-site`,
+      city:        (form.location || "").split("·")[0].trim() || "Pakistan",
+      skills:      (form.skills || "").split(",").map(s => s.trim()).filter(Boolean),
+      salary:      form.salary || "₨ Negotiable",
+      type:        form.type || "Full-time",
+      posted:      "Just now",
+      status:      "Open",
+      tone:        "green",
+      applicants:  0,
+      description: form.description || "",
+    };
+    const postedJobs = [...(currentUser.postedJobs || []), newJob];
+    const updated = window.LocalAuth.updateUser(currentUser.id, { postedJobs });
+    setCurrentUser(updated);
+    pushSnack({ tone: "success", title: "Job posted", sub: `"${form.title}" is now live — students can apply.` });
   };
 
   const handleLogout = () => {
@@ -485,8 +505,8 @@ const App = () => {
               allJobs={allJobs}
             />
           )}
-          {screen === "admin"    && <AdminDashboard />}
-          {screen === "employer" && <EmployerDashboard onPostJobOpen={() => setPostJob(true)} user={currentUser} />}
+          {screen === "admin"    && <AdminDashboard allJobs={allJobs} />}
+          {screen === "employer" && <EmployerDashboard onPostJobOpen={() => setPostJob(true)} user={currentUser} allJobs={allJobs} />}
         </div>
       )}
 

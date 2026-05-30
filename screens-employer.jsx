@@ -205,21 +205,17 @@ const TalentOverview = ({ user }) => {
           )}
         </Card>
 
-        <Card title="Hiring pipeline" sub="Estimated from applications">
-          <BarChart data={
-            applicants.length
-              ? (() => {
-                  const t = applicants.length;
-                  return [
-                    { label: "Applied",     value: t,                     pct: 100 },
-                    { label: "Reviewed",    value: Math.floor(t * 0.6),   pct: 60  },
-                    { label: "Shortlisted", value: Math.floor(t * 0.3),   pct: 30  },
-                    { label: "Interview",   value: Math.floor(t * 0.15),  pct: 15  },
-                    { label: "Offer",       value: Math.floor(t * 0.05),  pct: 5   },
-                  ];
-                })()
-              : M.pipelineStages
-          } tone="primary" />
+        <Card title="Hiring pipeline" sub="Based on your real applicants">
+          <BarChart data={(() => {
+            const t = applicants.length;
+            return [
+              { label: "Applied",     value: t,                     pct: 100 },
+              { label: "Reviewed",    value: Math.floor(t * 0.6),   pct: 60  },
+              { label: "Shortlisted", value: Math.floor(t * 0.3),   pct: 30  },
+              { label: "Interview",   value: Math.floor(t * 0.15),  pct: 15  },
+              { label: "Offer",       value: Math.floor(t * 0.05),  pct: 5   },
+            ];
+          })()} tone="primary" />
         </Card>
       </div>
 
@@ -279,61 +275,81 @@ const TalentOverview = ({ user }) => {
 };
 
 // ── My Jobs ───────────────────────────────────────────────────────────────
-const MyJobsPage = ({ onPostJob, user }) => {
-  const M       = window.MOCK;
+const MyJobsPage = ({ onPostJob, user, allJobs }) => {
   const company = user?.profile?.company || user?.name || "";
   const [viewJob, setViewJob] = useState(null);
+
+  // Jobs from the dataset matching this employer's company
+  const datasetJobs = (allJobs || window.ALL_JOBS || window.MOCK.jobs || [])
+    .filter(j => j.company?.toLowerCase() === company.toLowerCase());
+
+  // Jobs posted via the modal (saved in localStorage)
+  const postedJobs = (user?.postedJobs || []).map(j => ({
+    ...j,
+    status: j.status || "Open",
+    tone:   j.tone   || "green",
+  }));
+
+  // Combine: newly posted first, then dataset jobs
+  const myJobs = [...postedJobs, ...datasetJobs];
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 }}>
         <div>
           <h1 className="page-title">My jobs</h1>
-          <p className="page-sub" style={{ marginBottom: 0 }}>Active and recent postings.</p>
+          <p className="page-sub" style={{ marginBottom: 0 }}>
+            {myJobs.length} listing{myJobs.length !== 1 ? "s" : ""} · {company || "your company"}.
+          </p>
         </div>
         <Button variant="primary" icon="plus" onClick={onPostJob}>Post a job</Button>
       </div>
 
-      <div className="stack-md">
-        {M.myJobs.map((j) => {
-          const appCount = getApplicantsForJob(company, j.title).length;
-          return (
-            <div className="card" key={j.id}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                <div>
-                  <h3 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 4px" }}>{j.title}</h3>
-                  <p style={{ fontSize: 12.5, color: "var(--text-2)", margin: 0 }}>
-                    Posted {j.posted} · <strong style={{ color: "var(--text)" }}>{appCount}</strong> applicant{appCount !== 1 ? "s" : ""}
-                  </p>
+      {myJobs.length === 0 ? (
+        <div className="card">
+          <div className="empty-state">
+            <span className="icon"><Icon name="briefcase" size={20} /></span>
+            <h4>No jobs yet</h4>
+            <p>Post a job above, or make sure your company name in your profile matches the job listings.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="stack-md">
+          {myJobs.map((j) => {
+            const appCount = getApplicantsForJob(company, j.title).length;
+            return (
+              <div className="card" key={j.id}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 4px" }}>{j.title}</h3>
+                    <p style={{ fontSize: 12.5, color: "var(--text-2)", margin: 0 }}>
+                      Posted {j.posted} · <strong style={{ color: "var(--text)" }}>{appCount}</strong> applicant{appCount !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <Pill tone={j.tone || "green"} large>{j.status || "Open"}</Pill>
                 </div>
-                <Pill tone={j.tone} large>{j.status}</Pill>
+                <TagsRow tags={j.skills || []} tone="blue" />
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", margin: "12px 0", fontSize: 12.5, color: "var(--text-2)" }}>
+                  <span className="salary-tag">{j.salary}</span>
+                  <span>·</span>
+                  <span>{j.location}</span>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button variant="primary" size="sm" onClick={() => setViewJob(j)}>
+                    View applicants ({appCount})
+                  </Button>
+                  {(j.status || "Open") === "Open"
+                    ? <Button variant="outline" size="sm">Close listing</Button>
+                    : <Button variant="outline" size="sm">Reopen</Button>}
+                </div>
               </div>
-              <TagsRow tags={j.skills} tone="blue" />
-              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", margin: "12px 0", fontSize: 12.5, color: "var(--text-2)" }}>
-                <span className="salary-tag">{j.salary}</span>
-                <span>·</span>
-                <span>{j.location}</span>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <Button variant="primary" size="sm" onClick={() => setViewJob(j)}>
-                  View applicants ({appCount})
-                </Button>
-                {j.status === "Open"
-                  ? <Button variant="outline" size="sm">Close listing</Button>
-                  : <Button variant="outline" size="sm">Reopen</Button>
-                }
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {viewJob && (
-        <ViewApplicantsModal
-          job={viewJob}
-          company={company}
-          onClose={() => setViewJob(null)}
-        />
+        <ViewApplicantsModal job={viewJob} company={company} onClose={() => setViewJob(null)} />
       )}
     </div>
   );
@@ -401,14 +417,14 @@ const SDGAlignment = ({ user }) => {
 };
 
 // ── Dashboard shell ───────────────────────────────────────────────────────
-const EmployerDashboard = ({ onPostJobOpen, user }) => {
+const EmployerDashboard = ({ onPostJobOpen, user, allJobs }) => {
   const [page, setPage] = useState("talent");
   return (
     <div className="shell">
       <EmployerSidebar current={page} onSelect={setPage} user={user} />
       <main className="main">
         {page === "talent" && <TalentOverview user={user} />}
-        {page === "jobs"   && <MyJobsPage onPostJob={onPostJobOpen} user={user} />}
+        {page === "jobs"   && <MyJobsPage onPostJob={onPostJobOpen} user={user} allJobs={allJobs} />}
         {page === "sdg"    && <SDGAlignment user={user} />}
       </main>
     </div>

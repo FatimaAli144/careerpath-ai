@@ -2,16 +2,20 @@
 
 // ── Helpers — compute live stats from localStorage ────────────────────────
 function getAdminStats() {
-  const all      = window.LocalAuth.getUsers() || [];
-  const students = all.filter(u => u.role === "student");
+  const all       = window.LocalAuth.getUsers() || [];
+  const students  = all.filter(u => u.role === "student");
   const employers = all.filter(u => u.role === "employer");
   const totalApps = students.reduce((n, s) => n + (s.appliedJobs || []).length, 0);
-  const openJobs  = (window.MOCK.myJobs || []).filter(j => j.status === "Open").length;
+  const allJobs   = window.ALL_JOBS || window.MOCK.jobs || [];
+  // Include employer-posted jobs too
+  const postedJobs = all.filter(u => u.role === "employer")
+    .flatMap(e => e.postedJobs || []);
+  const totalJobs = allJobs.length + postedJobs.length;
   return [
-    { label: "Total students",  value: students.length.toLocaleString(),  delta: students.filter(s => s.onboarded).length + " active" },
-    { label: "Employers",       value: employers.length.toLocaleString(), delta: employers.filter(e => e.onboarded).length + " verified" },
-    { label: "Job postings",    value: openJobs.toLocaleString(),         delta: "open right now" },
-    { label: "Applications",    value: totalApps.toLocaleString(),        delta: "across all students" },
+    { label: "Total students", value: students.length.toLocaleString(),  delta: students.filter(s => s.onboarded).length + " active" },
+    { label: "Employers",      value: employers.length.toLocaleString(), delta: employers.filter(e => e.onboarded).length + " verified" },
+    { label: "Job postings",   value: totalJobs.toLocaleString(),        delta: "from dataset + posted" },
+    { label: "Applications",   value: totalApps.toLocaleString(),        delta: "across all students" },
   ];
 }
 
@@ -26,19 +30,31 @@ function getLiveSkillCloud() {
 }
 
 function getLiveTopRoles() {
+  // First: use real application data
   const students = (window.LocalAuth.getUsers() || []).filter(u => u.role === "student");
-  const counts = {};
-  students.forEach(s => (s.appliedJobs || []).forEach(j => { if (j.title) counts[j.title] = (counts[j.title] || 0) + 1; }));
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  if (!sorted.length) return window.MOCK.topRoles;
-  const max = sorted[0][1];
-  return sorted.map(([label, value]) => ({ label, value, pct: Math.round((value / max) * 100) }));
+  const appCounts = {};
+  students.forEach(s => (s.appliedJobs || []).forEach(j => {
+    if (j.title) appCounts[j.title] = (appCounts[j.title] || 0) + 1;
+  }));
+  const fromApps = Object.entries(appCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (fromApps.length) {
+    const max = fromApps[0][1];
+    return fromApps.map(([label, value]) => ({ label, value, pct: Math.round((value / max) * 100) }));
+  }
+  // Fallback: show job title distribution from dataset (not hardcoded)
+  const allJobs = window.ALL_JOBS || window.MOCK.jobs || [];
+  const jobCounts = {};
+  allJobs.forEach(j => { if (j.title) jobCounts[j.title] = (jobCounts[j.title] || 0) + 1; });
+  const fromDataset = Object.entries(jobCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (!fromDataset.length) return [];
+  const max = fromDataset[0][1];
+  return fromDataset.map(([label, value]) => ({ label, value, pct: Math.round((value / max) * 100) }));
 }
 
 function getLiveFunnel() {
   const students = (window.LocalAuth.getUsers() || []).filter(u => u.role === "student");
   const total = students.reduce((n, s) => n + (s.appliedJobs || []).length, 0);
-  if (!total) return window.MOCK.applicationFunnel;
+  // Always dynamic — shows zeros when no applications yet
   return [
     { label: "Applied",     value: total,                      pct: 100  },
     { label: "Reviewed",    value: Math.floor(total * 0.50),   pct: 50   },
@@ -56,7 +72,7 @@ function getLiveUniversityCounts() {
     if (uni) counts[uni] = (counts[uni] || 0) + 1;
   });
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  if (!sorted.length) return window.MOCK.universityCounts;
+  if (!sorted.length) return [];
   const max = sorted[0][1];
   return sorted.map(([label, value]) => ({ label, value, pct: Math.round((value / max) * 100) }));
 }
@@ -311,8 +327,10 @@ const AdminAnalytics = () => (
 );
 
 // ── Dashboard shell ───────────────────────────────────────────────────────
-const AdminDashboard = () => {
+const AdminDashboard = ({ allJobs }) => {
   const [page, setPage] = useState("overview");
+  // Make allJobs available to module-level helpers
+  if (allJobs && allJobs.length) window.ALL_JOBS = allJobs;
   return (
     <div className="shell">
       <AdminSidebar current={page} onSelect={setPage} />
